@@ -1,96 +1,120 @@
 import pygame
-import random
+from config import Config
+from user_management import authenticate_user  # Importar la función para autenticación
+from score_management import save_score, get_high_scores  # Importar funciones de gestión de puntuaciones
 
-# Inicializa pygame
-pygame.init()
+class Brick:
+    def __init__(self, x, y):
+        self.rect = pygame.Rect(x, y, Config.BRICK_WIDTH, Config.BRICK_HEIGHT)
+        self.hit = False
 
-# Dimensiones de la ventana
-ANCHO, ALTO = 800, 600
-ventana = pygame.display.set_mode((ANCHO, ALTO))
-pygame.display.set_caption("Breakout Game")
+def draw_paddle(screen, x):
+    paddle_rect = pygame.Rect(x, Config.SCREEN_HEIGHT - Config.PADDLE_HEIGHT, Config.PADDLE_WIDTH, Config.PADDLE_HEIGHT)
+    pygame.draw.rect(screen, (0, 255, 0), paddle_rect)
+    return paddle_rect
 
-# Colores
-NEGRO = (0, 0, 0)
-BLANCO = (255, 255, 255)
-ROJO = (255, 0, 0)
-AZUL = (0, 0, 255)
+def draw_ball(screen, x, y):
+    ball_rect = pygame.Rect(x, y, Config.BALL_SIZE, Config.BALL_SIZE)
+    pygame.draw.ellipse(screen, (0, 0, 255), ball_rect)
+    return ball_rect
 
-# Dimensiones de la barra y de la pelota
-ANCHO_BARRA = 100
-ALTO_BARRA = 10
-ANCHO_PELOTA = 10
-ALTO_PELOTA = 10
+def draw_bricks(screen, bricks):
+    for brick in bricks:
+        if not brick.hit:
+            pygame.draw.rect(screen, Config.BRICK_COLOR, brick.rect)
 
-# Posición inicial de la barra y la pelota
-barra_x = ANCHO // 2 - ANCHO_BARRA // 2
-barra_y = ALTO - 30
-pelota_x = ANCHO // 2 - ANCHO_PELOTA // 2
-pelota_y = ALTO // 2 - ALTO_PELOTA // 2
+def draw_score(screen, score):
+    font = pygame.font.Font(None, 36)
+    score_text = font.render(f'Score: {score}', True, (255, 255, 255))
+    screen.blit(score_text, (10, 10))
 
-# Velocidades de la pelota
-pelota_dx = 4
-pelota_dy = 4
+def main():
+    pygame.init()
+    
+    # Autenticación de usuario (puedes cambiar esto para hacerlo interactivo)
+    username = "Alexander"  # Cambia esto según sea necesario
+    password = "Peñaloza"  # Cambia esto según sea necesario
+    user = authenticate_user(username, password)
+    if not user:
+        print("Usuario no autenticado. Saliendo...")
+        return
 
-# Lista de bloques
-bloques = []
-ANCHO_BLOQUE = 60
-ALTO_BLOQUE = 20
-for i in range(7):
-    for j in range(5):
-        bloque = pygame.Rect(i * (ANCHO_BLOQUE + 10) + 35, j * (ALTO_BLOQUE + 10) + 50, ANCHO_BLOQUE, ALTO_BLOQUE)
-        bloques.append(bloque)
+    screen = pygame.display.set_mode((Config.SCREEN_WIDTH, Config.SCREEN_HEIGHT))
+    pygame.display.set_caption("Arkanoid Game")
+    
+    paddle_x = (Config.SCREEN_WIDTH - Config.PADDLE_WIDTH) // 2
+    ball_x = Config.SCREEN_WIDTH // 2
+    ball_y = Config.SCREEN_HEIGHT // 2
+    ball_speed_x = Config.BALL_SPEED_X
+    ball_speed_y = Config.BALL_SPEED_Y
 
-# Control de FPS
-reloj = pygame.time.Clock()
+    # Crear los ladrillos
+    bricks = []
+    for row in range(Config.BRICK_ROWS):
+        for col in range(Config.BRICK_COLUMNS):
+            brick_x = col * (Config.BRICK_WIDTH + 10) + 10
+            brick_y = row * (Config.BRICK_HEIGHT + 5) + 30
+            bricks.append(Brick(brick_x, brick_y))
 
-# Bucle principal del juego
-jugando = True
-while jugando:
-    for evento in pygame.event.get():
-        if evento.type == pygame.QUIT:
-            jugando = False
+    score = 0
 
-    # Movimiento de la barra
-    teclas = pygame.key.get_pressed()
-    if teclas[pygame.K_LEFT] and barra_x > 0:
-        barra_x -= 7
-    if teclas[pygame.K_RIGHT] and barra_x < ANCHO - ANCHO_BARRA:
-        barra_x += 7
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+        
+        # Mover la pala
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_LEFT] and paddle_x > 0:
+            paddle_x -= 5
+        if keys[pygame.K_RIGHT] and paddle_x < Config.SCREEN_WIDTH - Config.PADDLE_WIDTH:
+            paddle_x += 5
+        
+        # Actualizar la posición de la pelota
+        ball_x += ball_speed_x
+        ball_y += ball_speed_y
 
-    # Movimiento de la pelota
-    pelota_x += pelota_dx
-    pelota_y += pelota_dy
+        # Colisiones de la pelota con los bordes
+        if ball_x <= 0 or ball_x >= Config.SCREEN_WIDTH - Config.BALL_SIZE:
+            ball_speed_x *= -1
+        if ball_y <= 0:
+            ball_speed_y *= -1
+        
+        # Verifica si la bola cae
+        if ball_y >= Config.SCREEN_HEIGHT - Config.BALL_SIZE:
+            print("¡Perdiste!")
+            save_score(username, score)  # Guarda el score en la base de datos
+            score = 0  # Resetea el puntaje a 0
+            ball_x = Config.SCREEN_WIDTH // 2  # Reinicia la posición de la bola
+            ball_y = Config.SCREEN_HEIGHT // 2  # Reinicia la posición de la bola
+            continue  # Vuelve al inicio del ciclo para resetear el juego
 
-    # Rebote de la pelota en los bordes
-    if pelota_x <= 0 or pelota_x >= ANCHO - ANCHO_PELOTA:
-        pelota_dx = -pelota_dx
-    if pelota_y <= 0:
-        pelota_dy = -pelota_dy
+        # Colisión de la pelota con la pala
+        paddle_rect = draw_paddle(screen, paddle_x)
+        ball_rect = draw_ball(screen, ball_x, ball_y)
+        if ball_rect.colliderect(paddle_rect):
+            ball_speed_y *= -1
 
-    # Rebote de la pelota en la barra
-    if pelota_y + ALTO_PELOTA >= barra_y and barra_x <= pelota_x <= barra_x + ANCHO_BARRA:
-        pelota_dy = -pelota_dy
+        # Comprobar colisiones con ladrillos
+        for brick in bricks:
+            if not brick.hit and ball_rect.colliderect(brick.rect):
+                brick.hit = True
+                ball_speed_y *= -1
+                score += 10
+                break
 
-    # Rebote de la pelota en los bloques
-    for bloque in bloques[:]:
-        if bloque.collidepoint(pelota_x, pelota_y):
-            bloques.remove(bloque)
-            pelota_dy = -pelota_dy
-            break
+        # Limpiar pantalla y dibujar elementos
+        screen.fill((0, 0, 0))  # Limpia la pantalla con un fondo negro
+        draw_bricks(screen, bricks)
+        draw_paddle(screen, paddle_x)
+        draw_ball(screen, ball_x, ball_y)
+        draw_score(screen, score)
 
-    # Si la pelota cae
-    if pelota_y > ALTO:
-        jugando = False
+        pygame.display.flip()  # Actualiza la pantalla
+        pygame.time.delay(30)  # Añade un pequeño retraso
 
-    # Dibujar en la pantalla
-    ventana.fill(NEGRO)
-    pygame.draw.rect(ventana, BLANCO, (barra_x, barra_y, ANCHO_BARRA, ALTO_BARRA))
-    pygame.draw.ellipse(ventana, ROJO, (pelota_x, pelota_y, ANCHO_PELOTA, ALTO_PELOTA))
+    pygame.quit()
 
-    for bloque in bloques:
-        pygame.draw.rect(ventana, AZUL, bloque)
-
-    pygame.display.flip()
-    reloj.tick(60)
-
-pygame.quit()
+if __name__ == "__main__":
+    main()
